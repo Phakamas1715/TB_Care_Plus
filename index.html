@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TB Care Plus</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="styles.css">
+    
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-messaging.js"></script>
+    
+    <!-- JavaScript -->
+    <script defer src="script.js"></script>
+    <script defer src="firebase.js"></script>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 flex items-center justify-center min-h-screen p-6">
+    
+    <div class="w-full max-w-md bg-white dark:bg-gray-800 p-8 rounded-lg shadow-lg transition duration-300">
+        <h2 class="text-3xl font-extrabold text-center text-gray-800 dark:text-white">TB Care Plus</h2>
+        <p class="text-sm text-center text-gray-600 dark:text-gray-300 mb-6">ระบบติดตามผู้ป่วยวัณโรคอัจฉริยะ</p>
+
+        <!-- 📌 Register Section -->
+        <div id="registerContainer">
+            <h3 class="text-xl font-semibold text-center text-gray-700 dark:text-white mb-4">สมัครสมาชิก</h3>
+            <form id="registerForm" class="space-y-4">
+                <select id="registerTitle" class="w-full p-3 border rounded-lg dark:bg-gray-700 dark:text-white" required>
+                    <option value="">เลือกคำนำหน้า</option>
+                    <option value="นาย">นาย</option>
+                    <option value="นาง">นาง</option>
+                    <option value="นางสาว">นางสาว</option>
+                </select>
+                <input type="text" id="registerFirstName" placeholder="ชื่อ" class="w-full p-3 border rounded-lg dark:bg-gray-700 dark:text-white" required>
+                <input type="text" id="registerLastName" placeholder="นามสกุล" class="w-full p-3 border rounded-lg dark:bg-gray-700 dark:text-white" required>
+                <input type="text" id="registerPhone" placeholder="เบอร์โทรศัพท์" class="w-full p-3 border rounded-lg dark:bg-gray-700 dark:text-white" required>
+                <input type="email" id="registerEmail" placeholder="อีเมล" class="w-full p-3 border rounded-lg dark:bg-gray-700 dark:text-white" required>
+                <input type="password" id="registerPassword" placeholder="รหัสผ่าน" class="w-full p-3 border rounded-lg dark:bg-gray-700 dark:text-white" required>
+                
+                <!-- ที่อยู่ -->
+                <input type="text" id="registerHouseNo" placeholder="บ้านเลขที่" class="w-full p-3 border rounded-lg dark:bg-gray-700 dark:text-white" required>
+                <input type="text" id="registerVillageNo" placeholder="หมู่ที่" class="w-full p-3 border rounded-lg dark:bg-gray-700 dark:text-white" required>
+                <select id="registerSubdistrict" class="w-full p-3 border rounded-lg dark:bg-gray-700 dark:text-white" required>
+                    <option value="">เลือกตำบล</option>
+                </select>
+                <select id="registerDistrict" class="w-full p-3 border rounded-lg dark:bg-gray-700 dark:text-white" required>
+                    <option value="">เลือกอำเภอ</option>
+                </select>
+                <select id="registerProvince" class="w-full p-3 border rounded-lg dark:bg-gray-700 dark:text-white" required>
+                    <option value="ขอนแก่น">ขอนแก่น</option>
+                </select>
+                
+                <!-- เลือกบทบาท -->
+                <select id="registerRole" class="w-full p-3 border rounded-lg dark:bg-gray-700 dark:text-white" required>
+                    <option value="">เลือกบทบาท</option>
+                    <option value="Admin">Admin</option>
+                    <option value="Doctor">Doctor</option>
+                    <option value="Nurse">Nurse</option>
+                    <option value="Staff">Staff</option>
+                </select>
+                
+                <button type="submit" class="w-full bg-blue-500 text-white p-3 rounded-lg hover:bg-blue-600 transition">สมัครสมาชิก</button>
+            </form>
+            <p class="text-center mt-4 text-sm text-gray-600 dark:text-gray-400">มีบัญชีแล้ว? <a href="#" id="goToLogin" class="text-blue-500 hover:text-blue-700">เข้าสู่ระบบ</a></p>
+        </div>
+
+        <div id="userIdDisplay" class="text-center text-green-500 font-bold mt-4 hidden"></div>
+
+        <!-- 📌 เปิดใช้งานการแจ้งเตือน -->
+        <button id="enableNotifications" class="w-full bg-green-500 text-white p-3 rounded-lg mt-4 hover:bg-green-600 transition">
+            🔔 เปิดการแจ้งเตือน
+        </button>
+
+        <!-- 📌 Dark Mode Toggle -->
+        <button id="darkModeToggle" class="w-full bg-gray-500 text-white p-3 rounded-lg mt-4 hover:bg-gray-600 transition">🌙 เปิด/ปิด Dark Mode</button>
+    </div>
+
+    <script>
+        // ✅ ลงทะเบียน Service Worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/firebase-messaging-sw.js')
+            .then((registration) => {
+                console.log('✅ Service Worker ลงทะเบียนแล้ว:', registration);
+            })
+            .catch((error) => {
+                console.error('❌ Service Worker ลงทะเบียนล้มเหลว:', error);
+            });
+        }
+    </script>
+</body>
+</html>
+

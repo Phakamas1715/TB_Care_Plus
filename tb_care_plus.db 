@@ -1,0 +1,148 @@
+from flask import Flask, jsonify, request
+from flask_sqlalchemy import SQLAlchemy
+from flask_marshmallow import Marshmallow
+from flask_cors import CORS
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
+from werkzeug.security import generate_password_hash, check_password_hash
+import firebase_admin
+from firebase_admin import credentials, messaging
+import json
+
+app = Flask(__name__)
+CORS(app)
+
+# 🔹 เชื่อมต่อฐานข้อมูล MySQL ผ่าน MAMP
+app.config["SQLALCHEMY_DATABASE_URI"] = "mysql+pymysql://root:root@localhost:8889/tb_care"
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["JWT_SECRET_KEY"] = "your_secret_key"
+
+jwt = JWTManager(app)
+db = SQLAlchemy(app)
+ma = Marshmallow(app)
+
+# ✅ โหลด Firebase Admin SDK
+cred = credentials.Certificate("firebase-adminsdk.json")
+firebase_admin.initialize_app(cred)
+
+# ✅ โมเดลฐานข้อมูล
+class Patient(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    first_name = db.Column(db.String(255), nullable=False)
+    last_name = db.Column(db.String(255), nullable=False)
+    date_of_birth = db.Column(db.Date, nullable=False)
+    gender = db.Column(db.Enum("Male", "Female", "Other"), nullable=False)
+    contact_number = db.Column(db.String(15), nullable=False)
+    address = db.Column(db.Text)
+    date_registered = db.Column(db.DateTime, default=db.func.current_timestamp())
+
+class TbCase(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    patient_id = db.Column(db.Integer, db.ForeignKey("patient.id"), nullable=False)
+    diagnosis_date = db.Column(db.Date, nullable=False)
+    treatment_start_date = db.Column(db.Date)
+    treatment_end_date = db.Column(db.Date)
+    status = db.Column(db.Enum("Active", "Recovered", "Inactive"), nullable=False, default="Active")
+
+class TreatmentRecord(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    tb_case_id = db.Column(db.Integer, db.ForeignKey("tb_case.id"), nullable=False)
+    treatment_date = db.Column(db.Date, nullable=False)
+    medication = db.Column(db.String(255), nullable=False)
+    dosage = db.Column(db.String(255), nullable=False)
+    notes = db.Column(db.Text)
+
+class HealthcareProvider(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    first_name = db.Column(db.String(255), nullable=False)
+    last_name = db.Column(db.String(255), nullable=False)
+    contact_number = db.Column(db.String(15), nullable=False)
+    email = db.Column(db.String(255), unique=True, nullable=False)
+    role = db.Column(db.Enum("Doctor", "Nurse", "Admin", "Staff"), nullable=False)
+
+class Appointment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    patient_id = db.Column(db.Integer, db.ForeignKey("patient.id"), nullable=False)
+    provider_id = db.Column(db.Integer, db.ForeignKey("healthcare_provider.id"), nullable=False)
+    appointment_date = db.Column(db.DateTime, nullable=False)
+    purpose = db.Column(db.Text, nullable=False)
+    notes = db.Column(db.Text)
+
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(255), unique=True, nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
+    role = db.Column(db.Enum("Admin", "Doctor", "Nurse", "Staff"), nullable=False)
+    provider_id = db.Column(db.Integer, db.ForeignKey("healthcare_provider.id"), nullable=True)
+
+class Notification(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    title = db.Column(db.String(255), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    is_read = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
+
+class DeviceToken(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    token = db.Column(db.String(255), unique=True, nullable=False)
+    platform = db.Column(db.Enum("iOS", "Android", "Web"), nullable=False)
+    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
+
+# ✅ API สมัครสมาชิก
+@app.route('/api/register', methods=['POST'])
+def register():
+    data = request.get_json()
+    if not all(key in data for key in ("username", "password", "role")):
+        return jsonify({"message": "กรุณากรอกข้อมูลให้ครบ"}), 400
+
+    if User.query.filter_by(username=data["username"]).first():
+        return jsonify({"message": "ชื่อผู้ใช้นี้ถูกใช้ไปแล้ว"}), 400
+
+    hashed_password = generate_password_hash(data["password"], method="sha256")
+    new_user = User(username=data["username"], password_hash=hashed_password, role=data["role"])
+    
+    db.session.add(new_user)
+    db.session.commit()
+    
+    return jsonify({"message": "ลงทะเบียนสำเร็จ!", "user_id": new_user.id}), 201
+
+# ✅ API ล็อกอิน
+@app.route('/api/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    user = User.query.filter_by(username=data["username"]).first()
+
+    if not user or not check_password_hash(user.password_hash, data["password"]):
+        return jsonify({"message": "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง"}), 401
+
+    access_token = create_access_token(identity={"id": user.id, "role": user.role})
+    return jsonify({"message": "เข้าสู่ระบบสำเร็จ!", "user_id": user.id, "access_token": access_token}), 200
+
+# ✅ API ส่ง Push Notification
+@app.route('/api/send-notification', methods=['POST'])
+def send_notification():
+    data = request.get_json()
+    user_id = data.get("user_id")
+    title = data.get("title")
+    message = data.get("message")
+
+    tokens = [t.token for t in DeviceToken.query.filter_by(user_id=user_id).all()]
+    if not tokens:
+        return jsonify({"message": "ไม่พบอุปกรณ์ที่ลงทะเบียน"}), 404
+
+    notification = messaging.MulticastMessage(
+        notification=messaging.Notification(title=title, body=message),
+        tokens=tokens,
+    )
+
+    response = messaging.send_multicast(notification)
+    return jsonify({"message": "ส่งการแจ้งเตือนสำเร็จ!", "success_count": response.success_count}), 200
+
+# ✅ สร้างตารางในฐานข้อมูล
+if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
+    app.run(host="0.0.0.0", port=5501, debug=False)
+
+
